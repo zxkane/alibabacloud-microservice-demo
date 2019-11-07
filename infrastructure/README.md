@@ -1,8 +1,12 @@
-# Useful commands
+# Infrastructure on AWS 
 
- * `npm run build`   compile typescript to js
- * `npm run watch`   watch for changes and compile
- * `npm run test`    perform the jest unit tests
- * `cdk deploy`      deploy this stack to your default AWS account/region
- * `cdk diff`        compare deployed stack with current state
- * `cdk synth`       emits the synthesized CloudFormation template
+## Devops pipeline
+This stack would create the devops CI/CD pipelines for microservices,
+
+- Code pipelines automatically trigger building, deploying of microservices when code change is submitted to Github repo
+- ECR repositories will be created per microservices
+
+### How to deploy
+```shell
+cdk deploy eCommenceDevopsStack
+```
