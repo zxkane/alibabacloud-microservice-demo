@@ -71,18 +71,21 @@ export class DevopsStack extends cdk.Stack {
                     'base-directory': `src/${service.name}`
                 },
                 cache: {
-                    paths: ['/$HOME/.m2/']
+                    paths: ['/$HOME/.m2/**/*']
                 }
             }),
-            cache: codebuild.Cache.local(codebuild.LocalCacheMode.DOCKER_LAYER, codebuild.LocalCacheMode.CUSTOM),
+            cache: codebuild.Cache.bucket(devopsBucket, {
+                prefix: 'build-cache'
+            }),
             environment: {
                 buildImage: codebuild.LinuxBuildImage.UBUNTU_14_04_OPEN_JDK_8,
             }
         });
         const buildOutput = new codepipeline.Artifact();
-        const repoName = `ecommence_${service.name}`;
+        const repoName = `ecommence/${service.name}`;
         new ecr.Repository(this, repoName, {
             repositoryName: repoName,
+            removalPolicy: cdk.RemovalPolicy.DESTROY 
         });
         const ecrPolicy1 = new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
