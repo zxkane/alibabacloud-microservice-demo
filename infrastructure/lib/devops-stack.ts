@@ -13,7 +13,8 @@ export class DevopsStack extends cdk.Stack {
     // The code that defines your stack goes here
     // s3 bucket
     const devopsBucket = new s3.Bucket(this, 'eCommenceDevopsBucket', {
-        removalPolicy: cdk.RemovalPolicy.DESTROY
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        versioned: true
     });
 
     const token = this.node.tryGetContext('github-token-key') || 'github-token';
@@ -32,16 +33,48 @@ export class DevopsStack extends cdk.Stack {
             artifact: 'productservice-provider/target/productservice-provider-1.0.0-SNAPSHOT.jar'
         }];
     for (const service of services) {
+        const sourceArtifaceName = `source-${service.name}`;
+        const pathPrefix = 'eCommenceSource';
+        const sourceTriggerProject = new codebuild.Project(this, `eCommenceProject-SourceTrigger-${service.name}`, {
+            artifacts: codebuild.Artifacts.s3({
+                bucket: devopsBucket,
+                name: sourceArtifaceName,
+                includeBuildId: false,
+                packageZip: true,
+                path: pathPrefix
+            }),
+            buildSpec: codebuild.BuildSpec.fromObject({
+                version: '0.2',
+                phases: {
+                },
+                artifacts: {
+                    files: [
+                        '**/*',
+                    ],
+                    'discard-paths': 'no',
+                },
+            }), 
+            description: `Package the source of project ${service.name}`,
+            projectName: `eCommenceProject-SourceTrigger-${service.name}`,
+            source: codebuild.Source.gitHub({
+                owner: 'zxkane',
+                repo: 'alibabacloud-microservice-demo',
+                cloneDepth: 1,
+                webhook: true,
+                webhookFilters: [
+                    codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH)
+                        .andBranchIs('migration').andFilePathIs(`src\/${service.name}\/.*`)
+                ]
+            })
+        });
+
         const sourceOutput = new codepipeline.Artifact();
-        // TODO use custom web hook for path filtering
-        const sourceAction = new codepipeline_actions.GitHubSourceAction({
-            actionName: 'GitHub_Source',
-            owner: 'zxkane',
-            repo: 'alibabacloud-microservice-demo',
-            oauthToken: cdk.SecretValue.secretsManager(token),
+        const s3SourceAction = new codepipeline_actions.S3SourceAction({
+            actionName: 'Source',
+            bucket: devopsBucket,
+            bucketKey: `${pathPrefix}/${sourceArtifaceName}`,
             output: sourceOutput,
-            branch: 'migration', // default: 'master'
-            trigger: codepipeline_actions.GitHubTrigger.NONE // default: 'WEBHOOK', 'NONE' is also possible for no Source trigger
+            trigger: codepipeline_actions.S3Trigger.POLL
         });
         
         const buildProject = new codebuild.PipelineProject(this, `eCommenceProject-${service.name}`, {
@@ -175,7 +208,7 @@ export class DevopsStack extends cdk.Stack {
             stages: [
                 {
                     stageName: 'source',
-                    actions: [sourceAction]
+                    actions: [s3SourceAction]
                 },
                 {
                     stageName: 'build',
