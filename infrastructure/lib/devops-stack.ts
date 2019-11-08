@@ -24,8 +24,8 @@ export class DevopsStack extends cdk.Stack {
             artifact: 'cartservice-provider/target/cartservice-provider-1.0.0-SNAPSHOT.jar'
         }, 
         {
-            name: 'frontend',
-            artifact: 'target/frontend-1.0.0-SNAPSHOT.jar'
+            name: 'frontendservice',
+            artifact: 'frontend/target/frontend-1.0.0-SNAPSHOT.jar'
         }, 
         {
             name: 'productservice',
