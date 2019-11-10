@@ -14,5 +14,28 @@ export class ClusterStack extends cdk.Stack {
     const cluster = new ecs.Cluster(this, `eCommenceCluster`, {
         vpc: props.vpc
     });
+
+    const nacosTaskDefinition = new ecs.FargateTaskDefinition(this, `NacosTask`, {
+        // https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html
+        memoryLimitMiB: 2048, 
+        cpu: 512
+      });
+      const nacosContainer = nacosTaskDefinition.addContainer(`NacosContainer`, {
+        // Use an image from previous built image
+        image: ecs.ContainerImage.fromRegistry('nacos/nacos-server:latest'),
+        // ... other options here ...
+        environment: {
+            PREFER_HOST_MODE: 'hostname',
+            MODE: 'standalone'
+        }
+      });
+      nacosContainer.addPortMappings({
+        containerPort: 8848,
+      });
+      const nacosService = new ecs.FargateService(this, `NacosService`, {
+        cluster,
+        taskDefinition: nacosTaskDefinition,
+        desiredCount: 1
+      });
   }
 }
