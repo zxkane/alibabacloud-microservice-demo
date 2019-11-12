@@ -138,12 +138,23 @@ export class DevopsStack extends cdk.Stack {
             "ecr:GetAuthorizationToken",
         );
         ecrPolicy2.addAllResources();
-        const ecrRole = new iam.Role(this, `ECRRole-eCommence-${service.name}`, {
+        const ssmPolicy = new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+        });
+        ssmPolicy.addActions(
+            "ssm:PutParameter",
+        );
+        const versionParaPath = `/prod/eCommence/${service.name}/version/latest`;
+        ssmPolicy.addResources(`arn:${stack.partition}:ssm:${stack.region}:${stack.account}:parameter${versionParaPath}`);
+        const deployRole = new iam.Role(this, `ECRRole-eCommence-${service.name}`, {
             assumedBy: new iam.ServicePrincipal("codebuild.amazonaws.com"),
             inlinePolicies: {
                 ecr: new iam.PolicyDocument({
                     statements: [ecrPolicy1, ecrPolicy2]
                 }),
+                ssm: new iam.PolicyDocument({
+                    statements: [ssmPolicy]
+                })
             }
         });
         const deployProject = new codebuild.PipelineProject(this, `eCommenceProject-Image-${service.name}`, {
@@ -176,7 +187,8 @@ export class DevopsStack extends cdk.Stack {
                             'echo Build completed on `date`',
                             'echo Pushing the Docker image...',
                             'docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$TAG',
-                            'docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest'
+                            'docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest',
+                            `aws ssm put-parameter --name "${versionParaPath}" --value "$TAG" --type String --overwrite`
                         ]
                     }  
                 }
@@ -200,7 +212,7 @@ export class DevopsStack extends cdk.Stack {
                     value: repoName 
                 }
             },
-            role: ecrRole,
+            role: deployRole,
         }); 
         const pipeline = new codepipeline.Pipeline(this, `eCommencePipeline-${service.name}`, {
             pipelineName: `eCommencePipeline-${service.name}`,
