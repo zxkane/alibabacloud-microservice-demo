@@ -2,6 +2,7 @@ import cdk = require('@aws-cdk/core');
 import ec2 = require('@aws-cdk/aws-ec2');
 import ecs = require('@aws-cdk/aws-ecs');
 import elbv2 = require('@aws-cdk/aws-elasticloadbalancingv2');
+import servicediscovery = require('@aws-cdk/aws-servicediscovery');
 
 interface ClusterProps extends cdk.StackProps {
     readonly vpc: ec2.IVpc;
@@ -12,6 +13,11 @@ export class ClusterStack extends cdk.Stack {
 
     // The code that defines your stack goes here
     const cluster = new ecs.Cluster(this, `eCommenceCluster`, {
+        defaultCloudMapNamespace: {
+          name: 'eCommenceCloudMapNamesapce',
+          type: servicediscovery.NamespaceType.DNS_PRIVATE,
+          vpc: props.vpc
+        },
         vpc: props.vpc
     });
 
@@ -34,6 +40,11 @@ export class ClusterStack extends cdk.Stack {
       });
       const nacosService = new ecs.FargateService(this, `NacosService`, {
         cluster,
+        cloudMapOptions: {
+          dnsRecordType: servicediscovery.DnsRecordType.A,
+          dnsTtl: cdk.Duration.seconds(10),
+          failureThreshold: 2,
+        },
         taskDefinition: nacosTaskDefinition,
         desiredCount: 1
       });
