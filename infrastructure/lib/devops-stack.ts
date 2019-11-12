@@ -165,17 +165,17 @@ export class DevopsStack extends cdk.Stack {
                         commands: [
                             'echo Build started on `date`',
                             'echo Building the Docker image...',
-                            'docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .',
-                            'export IAMGE_TAG="$IAMGE_TAG"_"$(date \'+%Y%m%d%H%M%S\')"',
-                            'docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG',
-                            'docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest'
+                            'export TAG="$IMAGE_BASETAG"_"$(date \'+%Y%m%d%H%M%S\')"',
+                            'docker build -t $IMAGE_REPO_NAME:$TAG .',
+                            'docker tag $IMAGE_REPO_NAME:$TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$TAG',
+                            'docker tag $IMAGE_REPO_NAME:$TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest'
                         ]
                     },
                     post_build: {
                         commands: [
                             'echo Build completed on `date`',
                             'echo Pushing the Docker image...',
-                            'docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG',
+                            'docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$TAG',
                             'docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest'
                         ]
                     }  
@@ -193,7 +193,7 @@ export class DevopsStack extends cdk.Stack {
                 AWS_ACCOUNT_ID: {
                     value: stack.account
                 },
-                IMAGE_TAG: {
+                IMAGE_BASETAG: {
                     value: '1.0.0.SNAPSHOT'
                 },
                 IMAGE_REPO_NAME: {
