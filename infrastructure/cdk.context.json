@@ -1,0 +1,11 @@
+{
+  "availability-zones:account=845861764576:region=ap-northeast-1": [
+    "ap-northeast-1a",
+    "ap-northeast-1c",
+    "ap-northeast-1d"
+  ],
+  "hosted-zone:account=845861764576:domainName=aws.kane.mx:privateZone=false:region=ap-northeast-1": {
+    "Id": "/hostedzone/Z3YX3U963K726",
+    "Name": "aws.kane.mx."
+  }
+}

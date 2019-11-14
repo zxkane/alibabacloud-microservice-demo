@@ -1,4 +1,5 @@
 import cdk = require('@aws-cdk/core');
+import certmgr = require('@aws-cdk/aws-certificatemanager');
 import ec2 = require('@aws-cdk/aws-ec2');
 import ecr = require('@aws-cdk/aws-ecr');
 import ecs = require('@aws-cdk/aws-ecs');
@@ -6,6 +7,8 @@ import elbv2 = require('@aws-cdk/aws-elasticloadbalancingv2');
 import logs = require('@aws-cdk/aws-logs');
 import servicediscovery = require('@aws-cdk/aws-servicediscovery');
 import ssm = require('@aws-cdk/aws-ssm');
+import route53 = require('@aws-cdk/aws-route53');
+import route53Targets = require('@aws-cdk/aws-route53-targets');
 
 interface ClusterProps extends cdk.StackProps {
     readonly vpc: ec2.IVpc;
@@ -24,27 +27,40 @@ export class ClusterStack extends cdk.Stack {
             vpc: props.vpc
         });
 
+        const domainName = 'master-builder.aws.kane.mx';
+        const hostedZone = route53.HostedZone.fromLookup(this, `HostedZone-aws-kane-mx`, {
+            domainName: 'aws.kane.mx',
+            privateZone: false
+        });
+
+        const certificate = new certmgr.DnsValidatedCertificate(this, `Certificate-${domainName}`, {
+            domainName,
+            hostedZone,
+            validationMethod: certmgr.ValidationMethod.DNS
+        });
+
         const lb = new elbv2.ApplicationLoadBalancer(this, 'eCommence-ALB', {
             vpc: props.vpc,
             internetFacing: true,
-            http2Enabled: false
+            http2Enabled: true
         });
 
         // redirect 80 to 443
-        // const listener80 = lb.addListener('Listener80', { port: 80 });
-        // listener80.addRedirectResponse('redirect-to-443', {
-        //     protocol: elbv2.ApplicationProtocol.HTTPS,
-        //     port: '443',
-        //     statusCode: 'HTTP_301'
-        // });
-
         const listener80 = lb.addListener('Listener80', { port: 80 });
+        listener80.addRedirectResponse('redirect-to-443', {
+            protocol: elbv2.ApplicationProtocol.HTTPS,
+            port: '443',
+            statusCode: 'HTTP_301'
+        });
+
+        const listener443 = lb.addListener('Listener443', { port: 443 });
+        listener443.addCertificateArns('Certs', [certificate.certificateArn]);
 
         const logGroup = new logs.LogGroup(this, 'eCommenceLogGroup', {
             retention: logs.RetentionDays.ONE_WEEK
-          });
+        });
 
-        const nacosPorts = [ 8848, 9090 ];
+        const nacosPorts = [8848, 9090];
         const nacosTaskDefinition = new ecs.FargateTaskDefinition(this, `NacosTask`, {
             // https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html
             memoryLimitMiB: 2048,
@@ -84,7 +100,7 @@ export class ClusterStack extends cdk.Stack {
              * aws ecs put-account-setting --name "serviceLongArnFormat" --value "enabled"
              * aws ecs put-account-setting --name "taskLongArnFormat" --value "enabled"
              * aws ecs put-account-setting --name "containerInstanceLongArnFormat" --value "enabled"
-             */ 
+             */
             propagateTags: ecs.PropagatedTagSource.TASK_DEFINITION,
         });
 
@@ -100,7 +116,7 @@ export class ClusterStack extends cdk.Stack {
                 cpu: 1024,
                 memory: 2048,
                 replicas: 2,
-                ports: [ 12345 ]
+                ports: [12345]
             },
             {
                 name: 'frontendservice',
@@ -112,7 +128,7 @@ export class ClusterStack extends cdk.Stack {
                 cpu: 1024,
                 memory: 2048,
                 replicas: 1,
-                ports: [ 8080 ],
+                ports: [8080],
                 expose: {
                     path: '/',
                     priority: 10
@@ -131,7 +147,7 @@ export class ClusterStack extends cdk.Stack {
                 cpu: 1024,
                 memory: 2048,
                 replicas: 2,
-                ports: [ 8082 ]
+                ports: [8082]
             }
         ];
         for (const service of eCommenceServices) {
@@ -180,8 +196,8 @@ export class ClusterStack extends cdk.Stack {
                 desiredCount: service.replicas
             });
             for (const nacosPort of nacosPorts) {
-                nacosService.connections.allowFrom(microServiceService.connections, 
-                    ec2.Port.tcp(nacosPort),  `request from ${service.name}`);
+                nacosService.connections.allowFrom(microServiceService.connections,
+                    ec2.Port.tcp(nacosPort), `request from ${service.name}`);
             }
             microServices.push({
                 name: service.name,
@@ -190,21 +206,21 @@ export class ClusterStack extends cdk.Stack {
             });
 
             if (service.expose) {
-                const target = listener80.addTargets(`Forward-For-${service.name}`, {
+                const target = listener443.addTargets(`Forward-For-${service.name}`, {
                     protocol: elbv2.ApplicationProtocol.HTTP,
                     port: service.ports[0],
                     pathPattern: service.expose.path,
                     priority: service.expose.priority,
                     targets: [microServiceService],
                 });
-                listener80.addTargetGroups('Targets', {
-                    targetGroups: [ target ]
+                listener443.addTargetGroups('Targets', {
+                    targetGroups: [target]
                 });
             }
         }
         loop: for (const service of eCommenceServices) {
             if (service.dependsOn) {
-                for (const micro of microServices){
+                for (const micro of microServices) {
                     if (service.name == micro.name) {
                         for (const dependOn of service.dependsOn) {
                             for (const micro2 of microServices) {
@@ -219,11 +235,24 @@ export class ClusterStack extends cdk.Stack {
                         continue loop;
                     }
                 }
-            }   
+            }
         }
 
-        new cdk.CfnOutput(this, 'eCommenceEndpoint', { 
-            value: lb.loadBalancerDnsName,
+        new route53.ARecord(this, `AAlias-${domainName}`, {
+            zone: hostedZone,
+            recordName: domainName,
+            ttl: cdk.Duration.minutes(5),
+            target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(lb)),
+        });
+        new route53.AaaaRecord(this, `AaaaAlias-${domainName}`, {
+            zone: hostedZone,
+            recordName: domainName,
+            ttl: cdk.Duration.minutes(5),
+            target: route53.AddressRecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(lb)),
+        });
+
+        new cdk.CfnOutput(this, 'eCommenceEndpoint', {
+            value: `https://${domainName}`,
             exportName: 'eCommenceEndpoint',
             description: 'DNS of endpoint'
         });
