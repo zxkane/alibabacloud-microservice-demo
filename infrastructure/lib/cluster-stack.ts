@@ -78,11 +78,14 @@ export class ClusterStack extends cdk.Stack {
             },
             taskDefinition: nacosTaskDefinition,
             desiredCount: 1,
-            /** FIXME
-             * still occurs error (The new ARN and resource ID format must be enabled to propagate tags. Opt in to the new format and try again.)
-             * even if opting in to the new format  
+            /** 
+             * Use below commands to enable long ARN
+             * 
+             * aws ecs put-account-setting --name "serviceLongArnFormat" --value "enabled"
+             * aws ecs put-account-setting --name "taskLongArnFormat" --value "enabled"
+             * aws ecs put-account-setting --name "containerInstanceLongArnFormat" --value "enabled"
              */ 
-            // propagateTags: ecs.PropagatedTagSource.SERVICE,
+            propagateTags: ecs.PropagatedTagSource.TASK_DEFINITION,
         });
 
         const nacosServiceAddr = `${nacosService.cloudMapService!.serviceName}.${nacosService.cloudMapService!.namespace.namespaceName}:${nacosPorts[0]}`;
@@ -154,7 +157,7 @@ export class ClusterStack extends cdk.Stack {
                 },
                 logging: ecs.LogDrivers.awsLogs({
                     streamPrefix: service.name,
-                    // datetimeFormat: '%Y-%m-%d %H:%M:%S',
+                    datetimeFormat: '%Y-%m-%d %H:%M:%S',
                     logGroup: logGroup,
                 })
             });
@@ -168,6 +171,7 @@ export class ClusterStack extends cdk.Stack {
             const microServiceService = new ecs.FargateService(this, `${service.name}Service`, {
                 cluster,
                 cloudMapOptions: {
+                    name: service.name,
                     dnsRecordType: servicediscovery.DnsRecordType.A,
                     dnsTtl: cdk.Duration.seconds(10),
                     failureThreshold: 2,
