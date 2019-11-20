@@ -23,7 +23,7 @@ public class ProductDAO {
         return productService.getProductList();
     }
 
-    @FeignClient(name = "productservice")
+    @FeignClient(name = "productservice", url="${service.product.url}")
     public interface ProductService {
 
         @GetMapping("/products/")

@@ -18,9 +18,10 @@ export class ClusterStack extends cdk.Stack {
         super(scope, id, props);
 
         // The code that defines your stack goes here
+        const cloudmapNamespace = 'eCommenceCloudMapNamesapce';
         const cluster = new ecs.Cluster(this, `eCommenceCluster`, {
             defaultCloudMapNamespace: {
-                name: 'eCommenceCloudMapNamesapce',
+                name: cloudmapNamespace,
                 type: servicediscovery.NamespaceType.DNS_PRIVATE,
                 vpc: props.vpc
             },
@@ -123,7 +124,7 @@ export class ClusterStack extends cdk.Stack {
                 image: '',
                 environments: {
                     'dubbo.registry.address': `nacos://${nacosServiceAddr}`,
-                    'spring.cloud.nacos.discovery.server-addr': nacosServiceAddr,
+                    'service.product.url': `http://productservice.${cloudmapNamespace}:8082`,
                 },
                 cpu: 1024,
                 memory: 2048,
@@ -142,7 +143,7 @@ export class ClusterStack extends cdk.Stack {
                 name: 'productservice',
                 image: '',
                 environments: {
-                    'spring.cloud.nacos.discovery.server-addr': nacosServiceAddr
+                    'spring.cloud.inetutils.preferred-networks': '10.0',
                 },
                 cpu: 1024,
                 memory: 2048,
@@ -165,12 +166,7 @@ export class ClusterStack extends cdk.Stack {
                     }).stringValue
                 ),
                 // ... other options here ...
-                // environment: service.environments
-                environment: {
-                    'dubbo.registry.address': `nacos://${nacosServiceAddr}`,
-                    'spring.cloud.nacos.discovery.server-addr': nacosServiceAddr,
-                    'spring.cloud.inetutils.preferred-networks': '10.0'
-                },
+                environment: service.environments,
                 logging: ecs.LogDrivers.awsLogs({
                     streamPrefix: service.name,
                     datetimeFormat: '%Y-%m-%d %H:%M:%S',
