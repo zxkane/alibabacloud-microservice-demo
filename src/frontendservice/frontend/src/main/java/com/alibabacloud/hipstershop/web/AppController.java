@@ -4,6 +4,7 @@ import com.alibabacloud.hipstershop.CartItem;
 import com.alibabacloud.hipstershop.dao.CartDAO;
 import com.alibabacloud.hipstershop.dao.ProductDAO;
 import com.alibabacloud.hipstershop.domain.Product;
+import com.amazonaws.xray.spring.aop.XRayEnabled;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -21,6 +22,7 @@ import java.util.Random;
  * @author wangtao 2019-08-12 15:41
  */
 @Controller
+@XRayEnabled
 public class AppController {
 
     @Autowired

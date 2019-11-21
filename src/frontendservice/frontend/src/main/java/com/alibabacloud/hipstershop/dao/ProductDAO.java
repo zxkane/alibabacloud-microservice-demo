@@ -1,6 +1,7 @@
 package com.alibabacloud.hipstershop.dao;
 
 import com.alibabacloud.hipstershop.domain.Product;
+import com.amazonaws.xray.spring.aop.XRayEnabled;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.stereotype.Service;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import java.util.List;
 
 @Service
+@XRayEnabled
 public class ProductDAO {
 
     @Autowired
@@ -24,6 +26,7 @@ public class ProductDAO {
     }
 
     @FeignClient(name = "productservice", url="${service.product.url}")
+    @XRayEnabled
     public interface ProductService {
 
         @GetMapping("/products/")

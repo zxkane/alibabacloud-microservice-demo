@@ -11,6 +11,11 @@
 
     <artifactId>productservice-provider</artifactId>
 
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    </properties>
+
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -32,6 +37,11 @@
             <groupId>com.alibabacloud.hipstershop</groupId>
             <artifactId>productservice-api</artifactId>
             <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-xray-recorder-sdk-spring</artifactId>
+            <version>2.3.0</version>
         </dependency>
     </dependencies>
 

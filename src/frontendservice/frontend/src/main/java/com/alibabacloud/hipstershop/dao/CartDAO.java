@@ -2,6 +2,7 @@ package com.alibabacloud.hipstershop.dao;
 
 import com.alibabacloud.hipstershop.CartItem;
 import com.alibabacloud.hipstershop.CartService;
+import com.amazonaws.xray.spring.aop.XRayEnabled;
 import org.apache.dubbo.config.annotation.Reference;
 import org.springframework.stereotype.Service;
 
@@ -11,6 +12,7 @@ import java.util.List;
  * @author wangtao 2019-08-14 17:11
  */
 @Service
+@XRayEnabled
 public class CartDAO {
 
     @Reference(version = "1.0.0")

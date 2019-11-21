@@ -75,14 +75,11 @@ export class DeploymentStack extends cdk.Stack {
         buildImage: codebuild.LinuxBuildImage.UBUNTU_14_04_NODEJS_10_14_1,
       }
     });
-    const cfArtifacts = new codepipeline.Artifact();
 
     const deploymentBucket = new s3.Bucket(this, 'DeploymentBucket', {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       versioned: true,
     });
-
-    const changesetArtifacts = new codepipeline.Artifact();
 
     const pipeline = new codepipeline.Pipeline(this, `eCommenceDeploymentPipeline`, {
       pipelineName: `eCommenceDeploymentPipeline`,

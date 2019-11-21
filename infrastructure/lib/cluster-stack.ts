@@ -127,8 +127,8 @@ export class ClusterStack extends cdk.Stack {
                     'service.product.url': `http://productservice.${cloudmapNamespace}:8082`,
                 },
                 cpu: 1024,
-                memory: 2048,
-                replicas: 1,
+                memory: 4096,
+                replicas: 2,
                 ports: [8080],
                 expose: {
                     path: '/',
@@ -171,7 +171,7 @@ export class ClusterStack extends cdk.Stack {
                     streamPrefix: service.name,
                     datetimeFormat: '%Y-%m-%d %H:%M:%S',
                     logGroup: logGroup,
-                })
+                }),
             });
             if (service.ports) {
                 for (const port of service.ports) {
@@ -180,6 +180,16 @@ export class ClusterStack extends cdk.Stack {
                     });
                 }
             }
+            const xrayDaemon = microServiceTaskDefinition.addContainer(`x-ray-for-${service.name}`, {
+                image: ecs.ContainerImage.fromRegistry('amazon/aws-xray-daemon'),
+                essential: true,
+                cpu: 32,
+                memoryReservationMiB: 256,
+            });
+            xrayDaemon.addPortMappings({
+                containerPort: 2000,
+                protocol: ecs.Protocol.UDP
+            });
             const microServiceService = new ecs.FargateService(this, `${service.name}Service`, {
                 cluster,
                 cloudMapOptions: {
