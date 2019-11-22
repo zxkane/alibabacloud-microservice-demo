@@ -4,6 +4,7 @@ import ec2 = require('@aws-cdk/aws-ec2');
 import ecr = require('@aws-cdk/aws-ecr');
 import ecs = require('@aws-cdk/aws-ecs');
 import elbv2 = require('@aws-cdk/aws-elasticloadbalancingv2');
+import iam = require('@aws-cdk/aws-iam');
 import logs = require('@aws-cdk/aws-logs');
 import servicediscovery = require('@aws-cdk/aws-servicediscovery');
 import ssm = require('@aws-cdk/aws-ssm');
@@ -116,7 +117,7 @@ export class ClusterStack extends cdk.Stack {
                 },
                 cpu: 1024,
                 memory: 2048,
-                replicas: 2,
+                replicas: 1,
                 ports: [12345]
             },
             {
@@ -152,9 +153,16 @@ export class ClusterStack extends cdk.Stack {
             }
         ];
         for (const service of eCommenceServices) {
+            const taskRole = new iam.Role(this, `ExecutorRole-${service.name}`, {
+                assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+                managedPolicies: [
+                  iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
+                ]
+            });
             const microServiceTaskDefinition = new ecs.FargateTaskDefinition(this, `${service.name}Task`, {
                 memoryLimitMiB: service.memory,
-                cpu: service.cpu
+                cpu: service.cpu,
+                taskRole,
             });
             const xrayDaemon = microServiceTaskDefinition.addContainer(`x-ray-for-${service.name}`, {
                 image: ecs.ContainerImage.fromRegistry('amazon/aws-xray-daemon'),
