@@ -7,10 +7,14 @@ import com.amazonaws.xray.entities.Subsegment;
 import com.amazonaws.xray.javax.servlet.AWSXRayServletFilter;
 
 import com.amazonaws.xray.spring.aop.XRayInterceptorUtils;
+import com.amazonaws.xray.strategy.DynamicSegmentNamingStrategy;
+
+import org.apache.commons.lang3.StringUtils;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
@@ -72,8 +76,14 @@ public class Application {
     @Configuration
     public class AwsXrayConfig {
 
+        @Value("${app.dnsNaming:}")
+        private String dnsNaming;
+
         @Bean
         public Filter TracingFilter() {
+            if (StringUtils.isNotBlank(dnsNaming)) {
+                return new AWSXRayServletFilter(new DynamicSegmentNamingStrategy("eCommence", dnsNaming));
+            }
             return new AWSXRayServletFilter("eCommence");
         }
     }

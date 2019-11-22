@@ -2,16 +2,24 @@ package com.alibabacloud.hipstershop;
 
 import java.util.Map;
 
+import javax.servlet.Filter;
+
+import com.amazonaws.util.StringUtils;
 import com.amazonaws.xray.AWSXRay;
 import com.amazonaws.xray.entities.Subsegment;
+import com.amazonaws.xray.javax.servlet.AWSXRayServletFilter;
 import com.amazonaws.xray.spring.aop.XRayInterceptorUtils;
+import com.amazonaws.xray.strategy.DynamicSegmentNamingStrategy;
 
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 
 @SpringBootApplication
@@ -60,6 +68,22 @@ public class ProductServiceApplication {
         @Override
         @Pointcut("@within(com.amazonaws.xray.spring.aop.XRayEnabled) && bean(*Controller)")
         public void xrayEnabledClasses() {}
+    }
+
+    @Configuration
+    public class AwsXrayConfig {
+
+        @Value("${app.dnsNaming:}")
+        private String dnsNaming;
+
+        @Bean
+        public Filter TracingFilter() {
+            final String name = "eCommence-product";
+            if (StringUtils.isNullOrEmpty(dnsNaming)) {
+                return new AWSXRayServletFilter(name);
+            }
+            return new AWSXRayServletFilter(new DynamicSegmentNamingStrategy(name, dnsNaming));
+        }
     }
 
     public static void main(String[] args) {

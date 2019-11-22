@@ -126,6 +126,7 @@ export class ClusterStack extends cdk.Stack {
                 environments: {
                     'dubbo.registry.address': `nacos://${nacosServiceAddr}`,
                     'service.product.url': `http://productservice.${cloudmapNamespace}:8082`,
+                    'app.dnsNaming': domainName
                 },
                 cpu: 1024,
                 memory: 2048,
@@ -145,6 +146,7 @@ export class ClusterStack extends cdk.Stack {
                 image: '',
                 environments: {
                     'spring.cloud.inetutils.preferred-networks': '10.0',
+                    'app.dnsNaming': domainName,
                 },
                 cpu: 1024,
                 memory: 2048,
