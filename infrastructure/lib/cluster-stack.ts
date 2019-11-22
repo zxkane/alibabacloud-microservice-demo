@@ -127,7 +127,7 @@ export class ClusterStack extends cdk.Stack {
                     'service.product.url': `http://productservice.${cloudmapNamespace}:8082`,
                 },
                 cpu: 1024,
-                memory: 4096,
+                memory: 2048,
                 replicas: 2,
                 ports: [8080],
                 expose: {
@@ -156,6 +156,16 @@ export class ClusterStack extends cdk.Stack {
                 memoryLimitMiB: service.memory,
                 cpu: service.cpu
             });
+            const xrayDaemon = microServiceTaskDefinition.addContainer(`x-ray-for-${service.name}`, {
+                image: ecs.ContainerImage.fromRegistry('amazon/aws-xray-daemon'),
+                essential: true,
+                cpu: 32,
+                memoryReservationMiB: 256,
+            });
+            xrayDaemon.addPortMappings({
+                containerPort: 2000,
+                protocol: ecs.Protocol.UDP
+            });
             const microServiceContainer = microServiceTaskDefinition.addContainer(`${service.name}Container`, {
                 // Use an image from previous built image
                 image: ecs.ContainerImage.fromEcrRepository(
@@ -180,16 +190,6 @@ export class ClusterStack extends cdk.Stack {
                     });
                 }
             }
-            const xrayDaemon = microServiceTaskDefinition.addContainer(`x-ray-for-${service.name}`, {
-                image: ecs.ContainerImage.fromRegistry('amazon/aws-xray-daemon'),
-                essential: true,
-                cpu: 32,
-                memoryReservationMiB: 256,
-            });
-            xrayDaemon.addPortMappings({
-                containerPort: 2000,
-                protocol: ecs.Protocol.UDP
-            });
             const microServiceService = new ecs.FargateService(this, `${service.name}Service`, {
                 cluster,
                 cloudMapOptions: {
@@ -217,7 +217,11 @@ export class ClusterStack extends cdk.Stack {
                     port: service.ports[0],
                     pathPattern: service.expose.path,
                     priority: service.expose.priority,
-                    targets: [microServiceService],
+                    targets: [microServiceService.loadBalancerTarget({
+                        containerName: microServiceContainer.containerName,
+                        containerPort: service.ports[0],
+                        protocol: ecs.Protocol.TCP
+                      })],
                 });
                 listener443.addTargetGroups('Targets', {
                     targetGroups: [target]
