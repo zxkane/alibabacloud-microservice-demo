@@ -1,7 +1,6 @@
 package com.alibabacloud.hipstershop;
 
 import java.util.Map;
-import java.util.Optional;
 
 import com.amazonaws.xray.AWSXRay;
 import com.amazonaws.xray.entities.Subsegment;

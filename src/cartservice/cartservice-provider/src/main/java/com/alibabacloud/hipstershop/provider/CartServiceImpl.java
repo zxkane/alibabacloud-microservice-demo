@@ -3,6 +3,8 @@ package com.alibabacloud.hipstershop.provider;
 import com.alibabacloud.hipstershop.CartItem;
 import org.apache.dubbo.config.annotation.Service;
 import com.alibabacloud.hipstershop.CartService;
+import com.amazonaws.xray.spring.aop.XRayEnabled;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,6 +13,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
+@XRayEnabled
 @Service(version = "1.0.0")
 public class CartServiceImpl implements CartService {
 
