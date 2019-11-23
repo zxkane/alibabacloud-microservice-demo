@@ -8,4 +8,5 @@ public interface CartService {
 
     boolean addItemToCart(String userID, String productID, int quantity);
 
+    void emptyCart(String userID);
 }

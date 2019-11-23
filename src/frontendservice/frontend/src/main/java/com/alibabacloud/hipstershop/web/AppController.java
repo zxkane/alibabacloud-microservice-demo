@@ -98,6 +98,12 @@ public class AppController {
         return new RedirectView("/cart");
     }
 
+    @PostMapping("/cart/empty")
+    public RedirectView emptyCart() {
+        cartDAO.emptyCart(userID);
+        return new RedirectView("/cart");
+    }
+
     @ModelAttribute("cartSize")
     public int getCartSize() {
         return cartDAO.viewCart(userID).size();

@@ -38,4 +38,9 @@ public class CartServiceImpl implements CartService {
         itemList.add(new CartItem(productID, quantity));
         return true;
     }
+
+    @Override
+    public void emptyCart(String userID) {
+        cartStore.remove(userID);
+    }
 }

@@ -25,4 +25,8 @@ public class CartDAO {
     public boolean addToCart(String userID, String productID, int quantity) {
         return cartService.addItemToCart(userID, productID, quantity);
     }
+
+    public void emptyCart(String userID) {
+        cartService.emptyCart(userID);
+    }
 }
