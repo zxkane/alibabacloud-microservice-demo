@@ -31,7 +31,7 @@ public class CartServiceImpl implements CartService {
         List<CartItem> itemList = cartStore.computeIfAbsent(userID, k -> new ArrayList<>());
         for (CartItem item: itemList) {
             if (item.productID.equals(productID)) {
-                item.quantity++;
+                item.quantity += quantity;
                 return true;
             }
         }
