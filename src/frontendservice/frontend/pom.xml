@@ -18,6 +18,7 @@
         <project.reporting.outputEncoding>${java.encoding}</project.reporting.outputEncoding>
         <dubbo.version>2.7.3</dubbo.version>
         <nacos.version>1.1.1</nacos.version>
+        <x-ray.version>2.4.0</x-ray.version>
         <spring-cloud-openfeign.version>2.1.2.RELEASE</spring-cloud-openfeign.version>
     </properties>
 
@@ -122,7 +123,12 @@
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-xray-recorder-sdk-spring</artifactId>
-            <version>2.4.0</version>
+            <version>${x-ray.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-xray-recorder-sdk-apache-http</artifactId>
+            <version>${x-ray.version}</version>
         </dependency>
     </dependencies>
 
