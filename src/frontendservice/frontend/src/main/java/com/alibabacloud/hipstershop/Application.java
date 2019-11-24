@@ -1,16 +1,11 @@
 package com.alibabacloud.hipstershop;
 
-import java.util.Map;
-
 import com.amazonaws.xray.AWSXRay;
 import com.amazonaws.xray.entities.Subsegment;
 import com.amazonaws.xray.javax.servlet.AWSXRayServletFilter;
-import com.amazonaws.xray.proxies.apache.http.HttpClientBuilder;
 import com.amazonaws.xray.spring.aop.XRayInterceptorUtils;
 import com.amazonaws.xray.strategy.DynamicSegmentNamingStrategy;
-
 import org.apache.commons.lang3.StringUtils;
-import org.apache.http.impl.client.CloseableHttpClient;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -24,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 
 import javax.servlet.Filter;
+import java.util.Map;
 
 @EnableFeignClients
 @SpringBootApplication
@@ -87,13 +83,8 @@ public class Application {
             }
             return new AWSXRayServletFilter("eCommence");
         }
-
-        @Bean
-        public CloseableHttpClient httpClient() {
-            return HttpClientBuilder.create().build();
-        }
     }
-    
+
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args);
     }
