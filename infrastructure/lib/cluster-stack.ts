@@ -172,10 +172,6 @@ export class ClusterStack extends cdk.Stack {
                 cpu: 32,
                 memoryReservationMiB: 256,
             });
-            xrayDaemon.addPortMappings({
-                containerPort: 2000,
-                protocol: ecs.Protocol.UDP
-            });
             const microServiceContainer = microServiceTaskDefinition.addContainer(`${service.name}Container`, {
                 // Use an image from previous built image
                 image: ecs.ContainerImage.fromEcrRepository(
