@@ -1,3 +1,4 @@
+import appmesh = require('@aws-cdk/aws-appmesh');
 import cdk = require('@aws-cdk/core');
 import certmgr = require('@aws-cdk/aws-certificatemanager');
 import ec2 = require('@aws-cdk/aws-ec2');
@@ -19,6 +20,13 @@ export class ClusterStack extends cdk.Stack {
         super(scope, id, props);
 
         // The code that defines your stack goes here
+        const stack = cdk.Stack.of(this);
+
+        const mesh = new appmesh.Mesh(this, 'eCommentMesh', {
+            meshName: 'eCommentMesh',
+            egressFilter: appmesh.MeshFilterType.ALLOW_ALL,
+        });
+
         const cloudmapNamespace = 'eCommenceCloudMapNamesapce';
         const cluster = new ecs.Cluster(this, `eCommenceCluster`, {
             defaultCloudMapNamespace: {
@@ -139,7 +147,8 @@ export class ClusterStack extends cdk.Stack {
                 dependsOn: [
                     'cartservice',
                     'productservice'
-                ]
+                ],
+                appmesh: true
             },
             {
                 name: 'productservice',
@@ -155,22 +164,63 @@ export class ClusterStack extends cdk.Stack {
             }
         ];
         for (const service of eCommenceServices) {
-            const taskRole = new iam.Role(this, `ExecutorRole-${service.name}`, {
+            const taskRole = new iam.Role(this, `TaskRole-${service.name}`, {
                 assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
                 managedPolicies: [
                   iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
+                  iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppMeshEnvoyAccess'),
                 ]
             });
+            const executionRole = new iam.Role(this, `ExecutionRole-${service.name}`, {
+                assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+                managedPolicies: [
+                  iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2ContainerRegistryReadOnly'),
+                ]
+            });
+            const envoyContainerName = `envoy-${service.name}`;
+            var proxyConfiguration = null;
+            const uid = 1337;
+            const envoyIngressPort = 15000;
+            const envoyEgressPort = 15001;
+            if (service.appmesh) {
+                proxyConfiguration = ecs.ProxyConfigurations.appMeshProxyConfiguration({
+                    containerName: envoyContainerName,
+                    properties: {
+                        appPorts: service.ports,
+                        proxyIngressPort: envoyIngressPort,
+                        proxyEgressPort: envoyEgressPort,
+                        egressIgnoredIPs: [
+                            '169.254.170.2',
+                            '169.254.169.254',
+                        ],
+                        ignoredUID: uid,
+                    }
+                });
+            }
             const microServiceTaskDefinition = new ecs.FargateTaskDefinition(this, `${service.name}Task`, {
                 memoryLimitMiB: service.memory,
                 cpu: service.cpu,
                 taskRole,
+                executionRole,
+                family: service.name,
+                proxyConfiguration,
             });
             const xrayDaemon = microServiceTaskDefinition.addContainer(`x-ray-for-${service.name}`, {
                 image: ecs.ContainerImage.fromRegistry('amazon/aws-xray-daemon'),
                 essential: true,
                 cpu: 32,
                 memoryReservationMiB: 256,
+                healthCheck: {
+                    command: [
+                        "CMD-SHELL",
+                        "timeout 1 /bin/bash -c '</dev/tcp/localhost/2000 && </dev/udp/localhost/2000'"
+                    ],
+                    startPeriod: cdk.Duration.seconds(10),
+                    interval: cdk.Duration.seconds(5),
+                    timeout: cdk.Duration.seconds(2),
+                    retries: 1
+                },
+                user: String(uid),
             });
             const microServiceContainer = microServiceTaskDefinition.addContainer(`${service.name}Container`, {
                 // Use an image from previous built image
@@ -188,6 +238,10 @@ export class ClusterStack extends cdk.Stack {
                     datetimeFormat: '%Y-%m-%d %H:%M:%S',
                     logGroup: logGroup,
                 }),
+            });
+            microServiceContainer.addContainerDependencies({
+                container: xrayDaemon,
+                condition: ecs.ContainerDependencyCondition.HEALTHY,
             });
             if (service.ports) {
                 for (const port of service.ports) {
@@ -217,6 +271,76 @@ export class ClusterStack extends cdk.Stack {
                 ports: service.ports
             });
 
+            /**
+             * Add app mesh
+             */
+            if (service.appmesh){
+                microServiceService.connections.allowInternally(ec2.Port.tcp(envoyIngressPort), 'envoy ingress port');
+                for (const port of service.ports)
+                    microServiceService.connections.allowInternally(ec2.Port.tcp(port), `service port ${port}`);
+                const node = new appmesh.VirtualNode(this, `node-${service.name}`, {
+                    mesh,
+                    cloudMapService: microServiceService.cloudMapService,
+                    listener: {
+                      portMapping: {
+                        port: service.ports[0],
+                        protocol: appmesh.Protocol.HTTP,
+                      },
+                    },
+                });
+                const envoyContainer = microServiceTaskDefinition.addContainer(envoyContainerName, {
+                    image: ecs.ContainerImage.fromRegistry(`840364872350.dkr.ecr.${stack.region}.amazonaws.com/aws-appmesh-envoy:v1.12.1.1-prod`),
+                    essential: true,
+                    environment: {
+                        APPMESH_VIRTUAL_NODE_NAME: `mesh/${mesh.meshName}/virtualNode/${node.virtualNodeName}`,
+                        ENABLE_ENVOY_XRAY_TRACING: '1',
+                    },
+                    healthCheck: {
+                        command: [
+                            "CMD-SHELL",
+                            "curl -s http://localhost:9901/server_info | grep state | grep -q LIVE"
+                        ],
+                        startPeriod: cdk.Duration.seconds(30),
+                        interval: cdk.Duration.seconds(5),
+                        timeout: cdk.Duration.seconds(2),
+                        retries: 2
+                    },
+                    user: String(uid)
+                });
+                envoyContainer.addPortMappings({
+                    containerPort: envoyIngressPort
+                }, {
+                    containerPort: envoyEgressPort
+                });
+                microServiceContainer.addContainerDependencies({
+                    container: envoyContainer,
+                    condition: ecs.ContainerDependencyCondition.HEALTHY,
+                });
+                xrayDaemon.addContainerDependencies({
+                    container: envoyContainer,
+                    condition: ecs.ContainerDependencyCondition.HEALTHY, 
+                });
+
+                const router = mesh.addVirtualRouter(`router-${service.name}`, {
+                    listener: {
+                      portMapping: {
+                        port: service.ports[0],
+                        protocol: appmesh.Protocol.HTTP,
+                      }
+                    }
+                });
+                router.addRoute(`route-${service.name}`, {
+                    routeTargets: [
+                      {
+                        virtualNode: node,
+                        weight: 10,
+                      },
+                    ],
+                    prefix: `/`,
+                    routeType: appmesh.RouteType.HTTP,
+                  });
+            }
+
             if (service.expose) {
                 const target = listener443.addTargets(`Forward-For-${service.name}`, {
                     protocol: elbv2.ApplicationProtocol.HTTP,
@@ -228,6 +352,7 @@ export class ClusterStack extends cdk.Stack {
                         containerPort: service.ports[0],
                         protocol: ecs.Protocol.TCP
                       })],
+                    deregistrationDelay: cdk.Duration.seconds(5),
                 });
                 listener443.addTargetGroups('Targets', {
                     targetGroups: [target]
