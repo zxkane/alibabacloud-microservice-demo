@@ -222,17 +222,17 @@ export class ClusterStack extends cdk.Stack {
                 },
                 user: String(uid),
             });
+            const imageVersion = ssm.StringParameter.fromStringParameterAttributes(this, `${service.name}ImageVersion`, {
+                parameterName: `/prod/eCommence/${service.name}/version/latest`,
+                // 'version' can be specified but is optional.
+            }).stringValue;
             const microServiceContainer = microServiceTaskDefinition.addContainer(`${service.name}Container`, {
                 // Use an image from previous built image
                 image: ecs.ContainerImage.fromEcrRepository(
                     ecr.Repository.fromRepositoryName(this, `${service.name}EcrRepo`, `${repoPrefix}${service.name}`),
-                    ssm.StringParameter.fromStringParameterAttributes(this, `${service.name}ImageVersion`, {
-                        parameterName: `/prod/eCommence/${service.name}/version/latest`,
-                        // 'version' can be specified but is optional.
-                    }).stringValue
-                ),
+                    imageVersion),
                 // ... other options here ...
-                environment: service.environments,
+                environment: Object.assign({'VERSION': imageVersion}, service.environments),
                 logging: ecs.LogDrivers.awsLogs({
                     streamPrefix: service.name,
                     datetimeFormat: '%Y-%m-%d %H:%M:%S',

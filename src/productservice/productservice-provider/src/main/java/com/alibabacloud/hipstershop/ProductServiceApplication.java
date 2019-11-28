@@ -78,7 +78,7 @@ public class ProductServiceApplication {
 
         @Bean
         public Filter TracingFilter() {
-            final String name = "eCommence-product";
+            final String name = "eCommence-product-v" + (System.getenv("VERSION") == null ? "Unknown" : System.getenv("VERSION"));
             if (StringUtils.isNullOrEmpty(dnsNaming)) {
                 return new AWSXRayServletFilter(name);
             }
