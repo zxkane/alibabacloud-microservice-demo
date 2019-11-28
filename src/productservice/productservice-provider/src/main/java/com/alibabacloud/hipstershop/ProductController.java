@@ -70,6 +70,33 @@ public class ProductController {
         p6.setPrice(800);
         p6.setCategories(Arrays.asList("toy"));
         products.add(p6);
+
+        Product p7 = new Product();
+        p7.setId("OLJCESPC7ZO");
+        p7.setName("Vintage Typewriter");
+        p7.setDescription("This typewriter looks good in your living room.");
+        p7.setPicture("/img/products/typewriter.jpg");
+        p7.setPrice(476);
+        p7.setCategories(Arrays.asList("toy"));
+        products.add(p7);
+
+        Product p8 = new Product();
+        p8.setId("66VCHSJNUPO");
+        p8.setName("Vintage Camera Lens");
+        p8.setDescription("You won't have a camera to use it and it probably doesn't work anyway.");
+        p8.setPicture("/img/products/camera-lens.png");
+        p8.setPrice(88);
+        p8.setCategories(Arrays.asList("toy"));
+        products.add(p8);
+
+        Product p9 = new Product();
+        p9.setId("1YMWWN1N4OO");
+        p9.setName("Home Barista Kit");
+        p9.setDescription("Always wanted to brew coffee with Chemex and Aeropress at home?");
+        p9.setPicture("/img/products/barista-kit.png");
+        p9.setPrice(868);
+        p9.setCategories(Arrays.asList("toy", "pockmongo"));
+        products.add(p9);
     }
 
     @GetMapping("/product/{id}")

@@ -130,6 +130,19 @@ export class ClusterStack extends cdk.Stack {
                 ports: [12345]
             },
             {
+                name: 'productservice',
+                image: '',
+                environments: {
+                    'spring.cloud.inetutils.preferred-networks': '10.0',
+                },
+                cpu: 1024,
+                memory: 2048,
+                replicas: 2,
+                ports: [8082],
+                appmesh: true,
+                canary: true,
+            },
+            {
                 name: 'frontendservice',
                 image: '',
                 environments: {
@@ -151,25 +164,13 @@ export class ClusterStack extends cdk.Stack {
                 ],
                 appmesh: true
             },
-            {
-                name: 'productservice',
-                image: '',
-                environments: {
-                    'spring.cloud.inetutils.preferred-networks': '10.0',
-                    'app.dnsNaming': domainName,
-                },
-                cpu: 1024,
-                memory: 2048,
-                replicas: 2,
-                ports: [8082],
-                appmesh: true,
-                canary: true,
-            }
         ];
 
         const uid = 1337;
         const envoyIngressPort = 15000;
         const envoyEgressPort = 15001;
+        
+        const virtualServices = [];
 
         for (const service of eCommenceServices) {
             const versions = [{
@@ -177,27 +178,36 @@ export class ClusterStack extends cdk.Stack {
                 version: ssm.StringParameter.fromStringParameterAttributes(this, `${service.name}ImageVersion`, {
                     parameterName: `/prod/eCommence/${service.name}/version/latest`,
                     // 'version' can be specified but is optional.
-                }).stringValue
+                }).stringValue,
+                weight: 50,
             },];
+            const canaryVersion = Boolean(this.node.tryGetContext('canary'));
+            if (service.canary && canaryVersion) {
+                versions.push({
+                    name: 'canary',
+                    version: ssm.StringParameter.valueForStringParameter(this, `/prod/eCommence/${service.name}/version/canary`),
+                    weight: 50
+                });
+            }
+
+            const taskRole = new iam.Role(this, `TaskRole-${service.name}`, {
+                assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+                managedPolicies: [
+                    iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
+                    iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppMeshEnvoyAccess'),
+                ]
+            });
+            const executionRole = new iam.Role(this, `ExecutionRole-${service.name}`, {
+                assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+                managedPolicies: [
+                    iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2ContainerRegistryReadOnly'),
+                ]
+            });
 
             const routeTargets = [];
             const targets: elbv2.IApplicationLoadBalancerTarget[] = [];
-            for (const version of versions) {
-                const taskRole = new iam.Role(this, `TaskRole-${service.name}`, {
-                    assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-                    managedPolicies: [
-                        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
-                        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppMeshEnvoyAccess'),
-                    ]
-                });
-                const executionRole = new iam.Role(this, `ExecutionRole-${service.name}`, {
-                    assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-                    managedPolicies: [
-                        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2ContainerRegistryReadOnly'),
-                    ]
-                });
-
-                const envoyContainerName = `envoy-${service.name}-${version.name}`;
+            for (const versionInfo of versions) {
+                const envoyContainerName = `envoy-${service.name}-${versionInfo.name}`;
                 var proxyConfiguration = null;
                 if (service.appmesh) {
                     proxyConfiguration = ecs.ProxyConfigurations.appMeshProxyConfiguration({
@@ -215,15 +225,15 @@ export class ClusterStack extends cdk.Stack {
                     });
                 }
 
-                const microServiceTaskDefinition = new ecs.FargateTaskDefinition(this, `task-${service.name}-${version.name}`, {
+                const microServiceTaskDefinition = new ecs.FargateTaskDefinition(this, `task-${service.name}-${versionInfo.name}`, {
                     memoryLimitMiB: service.memory,
                     cpu: service.cpu,
                     taskRole,
                     executionRole,
-                    family: service.name,
+                    family: `${service.name}-${versionInfo.name}`,
                     proxyConfiguration,
                 });
-                const xrayDaemon = microServiceTaskDefinition.addContainer(`x-ray-for-${service.name}-${version.name}`, {
+                const xrayDaemon = microServiceTaskDefinition.addContainer(`x-ray-for-${service.name}-${versionInfo.name}`, {
                     image: ecs.ContainerImage.fromRegistry('amazon/aws-xray-daemon'),
                     essential: true,
                     cpu: 32,
@@ -240,13 +250,13 @@ export class ClusterStack extends cdk.Stack {
                     },
                     user: String(uid),
                 });
-                const microServiceContainer = microServiceTaskDefinition.addContainer(`container-${service.name}-${version.name}`, {
+                const microServiceContainer = microServiceTaskDefinition.addContainer(`container-${service.name}-${versionInfo.name}`, {
                     // Use an image from previous built image
                     image: ecs.ContainerImage.fromEcrRepository(
-                        ecr.Repository.fromRepositoryName(this, `${service.name}EcrRepo`, `${repoPrefix}${service.name}`),
-                        version.version),
+                        ecr.Repository.fromRepositoryName(this, `ecr-repo-${service.name}-${versionInfo.name}`, `${repoPrefix}${service.name}`),
+                        versionInfo.version),
                     // ... other options here ...
-                    environment: Object.assign({ 'VERSION': version.version }, service.environments),
+                    environment: Object.assign({ 'VERSION': versionInfo.version }, service.environments),
                     logging: ecs.LogDrivers.awsLogs({
                         streamPrefix: service.name,
                         datetimeFormat: '%Y-%m-%d %H:%M:%S',
@@ -266,10 +276,10 @@ export class ClusterStack extends cdk.Stack {
                     }
                 }
 
-                const microServiceService = new ecs.FargateService(this, `service-${service.name}-${version.name}`, {
+                const microServiceService = new ecs.FargateService(this, `service-${service.name}-${versionInfo.name}`, {
                     cluster,
                     cloudMapOptions: {
-                        name: service.name,
+                        name: versionInfo.name == 'mainline' ? service.name : `${service.name}-${versionInfo.name}`,
                         dnsRecordType: servicediscovery.DnsRecordType.A,
                         dnsTtl: cdk.Duration.seconds(10),
                         failureThreshold: 2,
@@ -293,7 +303,7 @@ export class ClusterStack extends cdk.Stack {
                         microServiceService.connections.allowInternally(ec2.Port.tcp(port), `service port ${port}`);
                     }
 
-                    const node = new appmesh.VirtualNode(this, `node-${service.name}-${version.name}`, {
+                    const node = new appmesh.VirtualNode(this, `node-${service.name}-${versionInfo.name}`, {
                         mesh,
                         cloudMapService: microServiceService.cloudMapService,
                         listener: {
@@ -302,11 +312,22 @@ export class ClusterStack extends cdk.Stack {
                                 protocol: appmesh.Protocol.HTTP,
                             },
                         },
+                        cloudMapServiceInstanceAttributes: {
+                            ECS_TASK_DEFINITION_FAMILY: microServiceTaskDefinition.family
+                        }
                     });
+                    if (service.dependsOn){
+                        for (const dependOn of service.dependsOn) {
+                            for (const virtualService of virtualServices){
+                                if (dependOn == virtualService.name)
+                                    node.addBackends(virtualService.service);
+                            }
+                        }
+                    }
 
                     routeTargets.push({
                         virtualNode: node,
-                        weight: 10, 
+                        weight: versionInfo.weight, 
                     });
 
                     const envoyContainer = microServiceTaskDefinition.addContainer(envoyContainerName, {
@@ -369,9 +390,13 @@ export class ClusterStack extends cdk.Stack {
                     prefix: `/`,
                     routeType: appmesh.RouteType.HTTP,
                 });
-                mesh.addVirtualService(`virtual-service-${service.name}`, {
-                    virtualServiceName: service.name,
+                const virutalService = mesh.addVirtualService(`virtual-service-${service.name}`, {
+                    virtualServiceName: `${service.name}.${cloudmapNamespace}`,
                     virtualRouter: router,
+                });
+                virtualServices.push({
+                    name: service.name,
+                    service: virutalService,
                 });
             }
 
