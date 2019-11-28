@@ -88,6 +88,7 @@ public class AppController {
             item.productPicture = p.getPicture();
         }
         model.addAttribute("items", items);
+        model.addAttribute("totalCost", items.stream().mapToInt(i -> i.price * i.quantity).sum());
         return "cart.html";
     }
 

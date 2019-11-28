@@ -37,7 +37,8 @@
                         <strong th:text="${item.productName}"></strong><br/>
                         <small class="text-muted" th:text="@{'SKU: ' + ${item.productID}}"></small>
                     </div>
-                    <div class="col text-left" th:text="@{'Qty: ' + ${item.quantity}}">
+                    <div class="col text-left">
+                        <strong th:text="@{'Qty: ' + ${item.quantity}}"></strong>
                         <br/>
                         <strong th:text="${item.price}"></strong>
                     </div>
@@ -46,7 +47,7 @@
                 <div class="row pt-2 my-3">
                     <div class="col text-center">
                         <p class="text-muted my-0">Shipping Cost: <strong> free </strong></p>
-                        Total Cost: <strong> free </strong>
+                        Total Cost: <strong th:text="${totalCost}"></strong> </strong>
                     </div>
                 </div>
 
