@@ -5,6 +5,7 @@ import { InfrastructureStack } from '../lib/infrastructure-stack';
 import { DevopsStack } from '../lib/devops-stack';
 import { ClusterStack } from '../lib/cluster-stack';
 import { DeploymentStack } from '../lib/deployment-stack';
+import { ProductCanaryDeploymentStack } from '../lib/product-canary-deployment-stack';
 
 const APP_NAME = 'eCommence';
 const app = new cdk.App();
@@ -23,6 +24,10 @@ new ClusterStack(app, `${APP_NAME}ClusterStack`, {
 new DeploymentStack(app, `${APP_NAME}DeploymentStack`, {
     bucket: devopsStack.devopsBucket,
     repositories: devopsStack.repositories,
+    env,
+});
+new ProductCanaryDeploymentStack(app, `${APP_NAME}ProductCanaryDeploymentStack`, {
+    bucket: devopsStack.devopsBucket,
     env,
 });
 
