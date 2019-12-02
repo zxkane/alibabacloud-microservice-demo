@@ -1,4 +1,4 @@
-
+### This is a demo **Solution** to demonstrate migrating an EDAS application to AWS including _microservice management_, _devops_ and _infra as code_. See detail readme [here](ifnrastructure/../infrastructure/README.md).
 
 ### Introcution
 

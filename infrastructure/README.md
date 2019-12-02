@@ -1,9 +1,16 @@
-# Infrastructure on AWS 
+# Microservice solution on AWS 
+
+## Prerequisties
+- Install AWS CDK
+- Install dependencies
+```shell
+npm i
+```
 
 ## Devops pipeline
 This stack would create the devops CI/CD pipelines for microservices,
 
-- Code pipelines automatically trigger building, deploying of microservices when code change is submitted to Github repo
+- Code pipelines(including CodeBuild projects) automatically trigger building, and publishing microservice projects when code change is submitted to Github repo
 - ECR repositories will be created per microservices
 
 ### How to deploy
@@ -16,11 +23,30 @@ This stack would create an ECS cluster for eCommence application powered by serv
 
 - Microservice management / orchestration -- ECS
 - Service Registration / Service Discovery -- Cloud Map
-- Application container metrics -- Cloudwatch container insights
-- Application logs -- Cloudwatch logs insights
+- Microservice observability
+  - Metrics -- Cloudwatch container insights
+  - Logs -- Cloudwatch logs and logs insights
+  - Tracing -- X-Ray
+- Canary Deployment / Service Mesh -- App Mesh
 - CI/CD/Devops -- CodeBuild, CodePipeline, AWS CDK, CloudFormation
 
 ### How to deploy
 ```shell
 cdk deploy eCommenceClusterStack
+```
+
+## Deployment pipeline
+This stack would monitor the ECR repositories of microservices, then deploy the latest version of microservices to ECS cluster.
+
+### How to deploy
+```shell
+cdk deploy eCommenceDeploymentStack
+```
+
+## Canaray deployment pipeline
+This stack would monitor the code commit of source branch `bugfix`, then trigger code deployment pipeline as canary deployment(only works for **product** service).
+
+### How to deploy
+```shell
+cdk deploy eCommenceProductCanaryDeploymentStack
 ```
