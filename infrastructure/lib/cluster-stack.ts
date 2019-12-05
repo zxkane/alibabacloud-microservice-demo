@@ -11,7 +11,6 @@ import servicediscovery = require('@aws-cdk/aws-servicediscovery');
 import ssm = require('@aws-cdk/aws-ssm');
 import route53 = require('@aws-cdk/aws-route53');
 import route53Targets = require('@aws-cdk/aws-route53-targets');
-import { MessageChannel } from 'worker_threads';
 
 interface ClusterProps extends cdk.StackProps {
     readonly vpc: ec2.IVpc;
@@ -38,34 +37,55 @@ export class ClusterStack extends cdk.Stack {
             vpc: props.vpc
         });
 
-        const domainName = 'master-builder.aws.kane.mx';
-        const hostedZone = route53.HostedZone.fromLookup(this, `HostedZone-aws-kane-mx`, {
-            domainName: 'aws.kane.mx',
-            privateZone: false
-        });
-
-        const certificate = new certmgr.DnsValidatedCertificate(this, `Certificate-${domainName}`, {
-            domainName,
-            hostedZone,
-            validationMethod: certmgr.ValidationMethod.DNS
-        });
-
         const lb = new elbv2.ApplicationLoadBalancer(this, 'eCommence-ALB', {
             vpc: props.vpc,
             internetFacing: true,
             http2Enabled: true
         });
 
-        // redirect 80 to 443
-        const listener80 = lb.addListener('Listener80', { port: 80 });
-        listener80.addRedirectResponse('redirect-to-443', {
-            protocol: elbv2.ApplicationProtocol.HTTPS,
-            port: '443',
-            statusCode: 'HTTP_301'
-        });
+        const domainName = this.node.tryGetContext('DomainName');
+        var listener;
 
-        const listener443 = lb.addListener('Listener443', { port: 443 });
-        listener443.addCertificateArns('Certs', [certificate.certificateArn]);
+        if (domainName) {
+            // use custom domain, also requests a certificate via DNS verification of route53
+            const hostedZone = route53.HostedZone.fromLookup(this, `HostedZone-${domainName}`, {
+                domainName: domainName.substring(domainName.indexOf('.') + 1),
+                privateZone: false
+            });
+    
+            const certificate = new certmgr.DnsValidatedCertificate(this, `Certificate-${domainName}`, {
+                domainName,
+                hostedZone,
+                validationMethod: certmgr.ValidationMethod.DNS
+            });
+            // redirect 80 to 443
+            const listener80 = lb.addListener('Listener80', { port: 80 });
+            listener80.addRedirectResponse('redirect-to-443', {
+                protocol: elbv2.ApplicationProtocol.HTTPS,
+                port: '443',
+                statusCode: 'HTTP_301'
+            });
+
+            const listener443 = lb.addListener('Listener443', { port: 443 });
+            listener443.addCertificateArns('Certs', [certificate.certificateArn]);
+
+            listener = listener443;
+
+            new route53.ARecord(this, `AAlias-${domainName}`, {
+                zone: hostedZone,
+                recordName: domainName,
+                ttl: cdk.Duration.minutes(5),
+                target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(lb)),
+            });
+            new route53.AaaaRecord(this, `AaaaAlias-${domainName}`, {
+                zone: hostedZone,
+                recordName: domainName,
+                ttl: cdk.Duration.minutes(5),
+                target: route53.AddressRecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(lb)),
+            });
+        } else {
+            listener = lb.addListener('Listener80', { port: 80 });
+        }
 
         const logGroup = new logs.LogGroup(this, 'eCommenceLogGroup', {
             retention: logs.RetentionDays.ONE_WEEK
@@ -401,7 +421,7 @@ export class ClusterStack extends cdk.Stack {
             }
 
             if (service.expose) {
-                const target = listener443.addTargets(`Forward-For-${service.name}`, {
+                const target = listener.addTargets(`Forward-For-${service.name}`, {
                     protocol: elbv2.ApplicationProtocol.HTTP,
                     port: service.ports[0],
                     pathPattern: service.expose.path,
@@ -409,7 +429,7 @@ export class ClusterStack extends cdk.Stack {
                     targets,
                     deregistrationDelay: cdk.Duration.seconds(5),
                 });
-                listener443.addTargetGroups('Targets', {
+                listener.addTargetGroups('Targets', {
                     targetGroups: [target]
                 });
             }
@@ -434,23 +454,19 @@ export class ClusterStack extends cdk.Stack {
             }
         }
 
-        new route53.ARecord(this, `AAlias-${domainName}`, {
-            zone: hostedZone,
-            recordName: domainName,
-            ttl: cdk.Duration.minutes(5),
-            target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(lb)),
-        });
-        new route53.AaaaRecord(this, `AaaaAlias-${domainName}`, {
-            zone: hostedZone,
-            recordName: domainName,
-            ttl: cdk.Duration.minutes(5),
-            target: route53.AddressRecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(lb)),
-        });
+        if (domainName) {
+            new cdk.CfnOutput(this, 'eCommenceEndpoint', {
+                value: `https://${domainName}`,
+                exportName: 'eCommenceEndpoint',
+                description: 'DNS of endpoint'
+            });
+        } else {
 
-        new cdk.CfnOutput(this, 'eCommenceEndpoint', {
-            value: `https://${domainName}`,
-            exportName: 'eCommenceEndpoint',
-            description: 'DNS of endpoint'
-        });
+            new cdk.CfnOutput(this, 'eCommenceEndpoint', {
+                value: `http://${lb.loadBalancerDnsName}`,
+                exportName: 'eCommenceEndpoint',
+                description: 'DNS of endpoint'
+            });
+        }
     }
 }
