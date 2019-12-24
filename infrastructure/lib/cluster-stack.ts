@@ -182,7 +182,9 @@ export class ClusterStack extends cdk.Stack {
                     'cartservice',
                     'productservice'
                 ],
-                appmesh: true
+                // workaround for issue 
+                // https://github.com/aws/aws-toolkit-jetbrains/issues/1463
+                appmesh: false
             },
         ];
 
@@ -215,13 +217,27 @@ export class ClusterStack extends cdk.Stack {
                 managedPolicies: [
                     iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
                     iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppMeshEnvoyAccess'),
+                    // for cloud debug
+                    iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
                 ]
             });
+            const logsPolicy = new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+            });
+            logsPolicy.addActions(
+                "logs:CreateLogStream",
+            );
+            logsPolicy.addAllResources();
             const executionRole = new iam.Role(this, `ExecutionRole-${service.name}`, {
                 assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
                 managedPolicies: [
                     iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2ContainerRegistryReadOnly'),
-                ]
+                ],
+                inlinePolicies: {
+                    logs: new iam.PolicyDocument({
+                        statements: [ logsPolicy ]
+                    }),
+                }
             });
 
             const routeTargets = [];
@@ -253,23 +269,23 @@ export class ClusterStack extends cdk.Stack {
                     family: `${service.name}-${versionInfo.name}`,
                     proxyConfiguration,
                 });
-                const xrayDaemon = microServiceTaskDefinition.addContainer(`x-ray-for-${service.name}-${versionInfo.name}`, {
-                    image: ecs.ContainerImage.fromRegistry('amazon/aws-xray-daemon'),
-                    essential: true,
-                    cpu: 32,
-                    memoryReservationMiB: 256,
-                    healthCheck: {
-                        command: [
-                            "CMD-SHELL",
-                            "timeout 1 /bin/bash -c '</dev/tcp/localhost/2000 && </dev/udp/localhost/2000'"
-                        ],
-                        startPeriod: cdk.Duration.seconds(10),
-                        interval: cdk.Duration.seconds(5),
-                        timeout: cdk.Duration.seconds(2),
-                        retries: 1
-                    },
-                    user: String(uid),
-                });
+                // const xrayDaemon = microServiceTaskDefinition.addContainer(`x-ray-for-${service.name}-${versionInfo.name}`, {
+                //     image: ecs.ContainerImage.fromRegistry('amazon/aws-xray-daemon'),
+                //     essential: true,
+                //     cpu: 32,
+                //     memoryReservationMiB: 256,
+                //     healthCheck: {
+                //         command: [
+                //             "CMD-SHELL",
+                //             "timeout 1 /bin/bash -c '</dev/tcp/localhost/2000 && </dev/udp/localhost/2000'"
+                //         ],
+                //         startPeriod: cdk.Duration.seconds(10),
+                //         interval: cdk.Duration.seconds(5),
+                //         timeout: cdk.Duration.seconds(2),
+                //         retries: 1
+                //     },
+                //     user: String(uid),
+                // });
                 const microServiceContainer = microServiceTaskDefinition.addContainer(`container-${service.name}-${versionInfo.name}`, {
                     // Use an image from previous built image
                     image: ecs.ContainerImage.fromEcrRepository(
@@ -284,10 +300,10 @@ export class ClusterStack extends cdk.Stack {
                     }),
                 });
 
-                microServiceContainer.addContainerDependencies({
-                    container: xrayDaemon,
-                    condition: ecs.ContainerDependencyCondition.HEALTHY,
-                });
+                // microServiceContainer.addContainerDependencies({
+                //     container: xrayDaemon,
+                //     condition: ecs.ContainerDependencyCondition.HEALTHY,
+                // });
                 if (service.ports) {
                     for (const port of service.ports) {
                         microServiceContainer.addPortMappings({
@@ -378,10 +394,10 @@ export class ClusterStack extends cdk.Stack {
                         container: envoyContainer,
                         condition: ecs.ContainerDependencyCondition.HEALTHY,
                     });
-                    xrayDaemon.addContainerDependencies({
-                        container: envoyContainer,
-                        condition: ecs.ContainerDependencyCondition.HEALTHY,
-                    });
+                    // xrayDaemon.addContainerDependencies({
+                    //     container: envoyContainer,
+                    //     condition: ecs.ContainerDependencyCondition.HEALTHY,
+                    // });
                 }
 
                 if (service.expose) {
