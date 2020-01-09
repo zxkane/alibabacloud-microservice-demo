@@ -269,23 +269,23 @@ export class ClusterStack extends cdk.Stack {
                     family: `${service.name}-${versionInfo.name}`,
                     proxyConfiguration,
                 });
-                // const xrayDaemon = microServiceTaskDefinition.addContainer(`x-ray-for-${service.name}-${versionInfo.name}`, {
-                //     image: ecs.ContainerImage.fromRegistry('amazon/aws-xray-daemon'),
-                //     essential: true,
-                //     cpu: 32,
-                //     memoryReservationMiB: 256,
-                //     healthCheck: {
-                //         command: [
-                //             "CMD-SHELL",
-                //             "timeout 1 /bin/bash -c '</dev/tcp/localhost/2000 && </dev/udp/localhost/2000'"
-                //         ],
-                //         startPeriod: cdk.Duration.seconds(10),
-                //         interval: cdk.Duration.seconds(5),
-                //         timeout: cdk.Duration.seconds(2),
-                //         retries: 1
-                //     },
-                //     user: String(uid),
-                // });
+                const xrayDaemon = microServiceTaskDefinition.addContainer(`x-ray-for-${service.name}-${versionInfo.name}`, {
+                    image: ecs.ContainerImage.fromRegistry('amazon/aws-xray-daemon'),
+                    essential: true,
+                    cpu: 32,
+                    memoryReservationMiB: 256,
+                    healthCheck: {
+                        command: [
+                            "CMD-SHELL",
+                            "timeout 1 /bin/bash -c '</dev/tcp/localhost/2000 && </dev/udp/localhost/2000'"
+                        ],
+                        startPeriod: cdk.Duration.seconds(10),
+                        interval: cdk.Duration.seconds(5),
+                        timeout: cdk.Duration.seconds(2),
+                        retries: 1
+                    },
+                    user: String(uid),
+                });
                 const microServiceContainer = microServiceTaskDefinition.addContainer(`container-${service.name}-${versionInfo.name}`, {
                     // Use an image from previous built image
                     image: ecs.ContainerImage.fromEcrRepository(
@@ -300,10 +300,10 @@ export class ClusterStack extends cdk.Stack {
                     }),
                 });
 
-                // microServiceContainer.addContainerDependencies({
-                //     container: xrayDaemon,
-                //     condition: ecs.ContainerDependencyCondition.HEALTHY,
-                // });
+                microServiceContainer.addContainerDependencies({
+                    container: xrayDaemon,
+                    condition: ecs.ContainerDependencyCondition.HEALTHY,
+                });
                 if (service.ports) {
                     for (const port of service.ports) {
                         microServiceContainer.addPortMappings({
